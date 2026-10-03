@@ -16,6 +16,14 @@ A lightweight collaborative document editor built for the **Ajaia AI-Native Full
 
 ---
 
+## 🎬 72-second demo (subtitled)
+
+<video src="docs/demo-video.mp4" controls muted playsinline width="100%"></video>
+
+*Login (ALTCHA) → dashboard → autosave → version history & restore → role-based sharing → Markdown/PDF export → shared-doc view → legal pages. If the player doesn't load, [watch the video directly](docs/demo-video.mp4).*
+
+---
+
 ## Features
 
 - **Documents** — create, rename (inline, owner-only), edit, delete. Rich-text editing via TipTap: **bold**, *italic*, <u>underline</u>, H1–H3, blockquote, bulleted & numbered lists, undo/redo — plus one-click **Markdown export** (TipTap JSON → `.md` download, fully client-side).
