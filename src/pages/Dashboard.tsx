@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { useToast } from "../toast";
 import type { DocSummary } from "../types";
+import Shell from "../components/Shell";
+import { ConfirmDialog, type ConfirmState } from "../ui";
 import { timeAgo, initials } from "../lib/format";
 import { IMPORT_ACCEPT, fileToDocContent } from "../lib/importFile";
+import { IconFileText, IconPlus, IconSearch, IconTrash, IconUpload } from "../icons";
+
+type Seg = "all" | "owned" | "shared";
 
 function DocCard({
   doc,
@@ -14,59 +19,69 @@ function DocCard({
 }: {
   doc: DocSummary;
   kind: "owned" | "shared";
-  onDelete: (id: string) => void;
+  onDelete: (doc: DocSummary) => void;
 }) {
   return (
-    <a className="doc-card" href={`/doc/${doc.id}`}>
-      <div className="doc-card-top">
-        <h3>{doc.title}</h3>
+    <article className="doc-card">
+      <div className="doc-card-head">
+        <span className="doc-icon"><IconFileText /></span>
         <span className="doc-badges">
-          {kind === "shared" && <span className="badge">{doc.my_role === "editor" ? "Editor" : "Viewer"}</span>}
+          {kind === "shared" && (
+            <span className="badge">{doc.my_role === "editor" ? "Editor" : "Viewer"}</span>
+          )}
           {kind === "owned" && (doc.share_count ?? 0) > 0 && (
             <span className="badge subtle">Shared · {doc.share_count}</span>
           )}
         </span>
       </div>
-      <p className="muted">
+
+      <h3 className="doc-card-title">
+        <Link to={`/doc/${doc.id}`}>{doc.title}</Link>
+      </h3>
+
+      <p className="doc-card-meta">
         {kind === "shared" ? (
           <>
-            <span className="avatar tiny" style={{ background: doc.owner_color }}>
+            <span className="avatar xs" style={{ background: doc.owner_color }}>
               {initials(doc.owner_name)}
             </span>{" "}
-            Shared by {doc.owner_name}
+            {doc.owner_name} ·
           </>
         ) : (
-          "Owned by you"
-        )}
-        {" · "}Edited {timeAgo(doc.updated_at)}
+          "You ·"
+        )}{" "}
+        edited {timeAgo(doc.updated_at)}
       </p>
+
       {kind === "owned" && (
-        <button
-          type="button"
-          className="doc-delete"
-          title="Delete document"
-          aria-label={`Delete ${doc.title}`}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onDelete(doc.id);
-          }}
-        >
-          Delete
-        </button>
+        <div className="doc-card-actions">
+          <button
+            type="button"
+            className="btn-icon"
+            title="Delete document"
+            aria-label={`Delete ${doc.title}`}
+            onClick={() => onDelete(doc)}
+          >
+            <IconTrash />
+          </button>
+        </div>
       )}
-    </a>
+    </article>
   );
 }
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+
   const [owned, setOwned] = useState<DocSummary[]>([]);
   const [shared, setShared] = useState<DocSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [seg, setSeg] = useState<Seg>("all");
+  const [query, setQuery] = useState("");
   const [importing, setImporting] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -112,50 +127,115 @@ export default function Dashboard() {
     }
   };
 
-  const deleteDoc = async (id: string) => {
-    if (!window.confirm("Delete this document permanently? Access for everyone is removed.")) return;
-    try {
-      await api(`/api/documents/${id}`, { method: "DELETE" });
-      setOwned((prev) => prev.filter((d) => d.id !== id));
-      toast("Document deleted.", "ok");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Delete failed.");
-    }
+  const askDelete = (doc: DocSummary) => {
+    setConfirm({
+      title: "Delete document",
+      body: `"${doc.title}" will be permanently removed, along with its attachments and sharing access for everyone.`,
+      confirmLabel: "Delete",
+      onConfirm: async () => {
+        await api(`/api/documents/${doc.id}`, { method: "DELETE" });
+        setOwned((prev) => prev.filter((d) => d.id !== doc.id));
+        setShared((prev) => prev.filter((d) => d.id !== doc.id));
+        toast("Document deleted.", "ok");
+      },
+    });
   };
 
-  return (
-    <div className="shell">
-      <header className="app-header">
-        <a className="brand" href="/">
-          <span className="brand-mark">A</span> Ajaia Docs
-        </a>
-        <div className="header-actions">
-          {user && (
-            <span className="user-chip">
-              <span className="avatar tiny" style={{ background: user.color }}>
-                {initials(user.name)}
-              </span>
-              {user.name}
-            </span>
-          )}
-          <button type="button" className="btn ghost" onClick={() => logout()}>
-            Sign out
-          </button>
-        </div>
-      </header>
+  const q = query.trim().toLowerCase();
+  const filter = (list: DocSummary[]) =>
+    q ? list.filter((d) => d.title.toLowerCase().includes(q)) : list;
 
-      <main className="container">
-        <div className="dash-actions">
-          <button type="button" className="btn primary" onClick={newDoc}>
-            + New document
-          </button>
+  const fOwned = useMemo(() => filter(owned), [owned, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fShared = useMemo(() => filter(shared), [shared, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const total = owned.length + shared.length;
+
+  const renderGrid = (list: DocSummary[], kind: "owned" | "shared") => (
+    <div className="card-grid">
+      {list.map((d) => (
+        <DocCard key={d.id} doc={d} kind={kind} onDelete={askDelete} />
+      ))}
+    </div>
+  );
+
+  const renderSection = (label: string, list: DocSummary[], kind: "owned" | "shared") => (
+    <section>
+      <h2 className="section-label">{label}</h2>
+      {list.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon"><IconFileText /></div>
+          <h3 className="empty-title">
+            {q ? `No matches for "${query.trim()}"` : kind === "owned" ? "No documents yet" : "Nothing shared with you yet"}
+          </h3>
+          <p className="muted">
+            {q
+              ? "Try a different search term."
+              : kind === "owned"
+                ? "Create a blank document, or import a .txt / .md / .docx file to get started."
+                : `Ask another demo user to share a document with ${user?.email}.`}
+          </p>
+          {!q && kind === "owned" && (
+            <button type="button" className="btn primary sm" onClick={newDoc}>
+              <IconPlus /> New document
+            </button>
+          )}
+        </div>
+      ) : (
+        renderGrid(list, kind)
+      )}
+    </section>
+  );
+
+  return (
+    <Shell active="docs" navCount={total}>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Documents</h1>
+          <p className="page-sub">
+            Welcome back{user ? `, ${user.name.split(" ")[0]}` : ""} — {total}{" "}
+            {total === 1 ? "document" : "documents"} in your workspace.
+          </p>
+        </div>
+        <div className="dash-toolbar">
+          <label className="search-box">
+            <IconSearch />
+            <input
+              type="search"
+              placeholder="Search documents…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search documents"
+            />
+          </label>
+          <div className="seg" role="tablist" aria-label="Filter documents">
+            {(
+              [
+                ["all", `All (${total})`],
+                ["owned", `Owned (${owned.length})`],
+                ["shared", `Shared (${shared.length})`],
+              ] as Array<[Seg, string]>
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={seg === value}
+                className={`seg-btn${seg === value ? " active" : ""}`}
+                onClick={() => setSeg(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             className="btn"
             onClick={() => importInput.current?.click()}
             disabled={importing !== null}
           >
-            {importing ? `Importing ${importing}…` : "Import .txt / .md / .docx"}
+            <IconUpload /> {importing ? "Importing…" : "Import"}
+          </button>
+          <button type="button" className="btn primary" onClick={newDoc}>
+            <IconPlus /> New document
           </button>
           <input
             ref={importInput}
@@ -165,44 +245,27 @@ export default function Dashboard() {
             onChange={onImportPick}
           />
         </div>
+      </div>
 
-        {loading ? (
-          <p className="muted">Loading documents…</p>
-        ) : (
-          <>
-            <section>
-              <h2 className="section-title">Owned documents</h2>
-              {owned.length === 0 ? (
-                <p className="empty muted">
-                  No documents yet. Create one, or import a .txt / .md / .docx file to get started.
-                </p>
-              ) : (
-                <div className="card-grid">
-                  {owned.map((d) => (
-                    <DocCard key={d.id} doc={d} kind="owned" onDelete={deleteDoc} />
-                  ))}
-                </div>
-              )}
-            </section>
+      {loading ? (
+        <div className="card-grid doc-loading" aria-hidden="true">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div className="sk-card" key={i}>
+              <span className="skeleton sk-line w-40" />
+              <span className="skeleton sk-line w-90" />
+              <span className="skeleton sk-line w-75" />
+              <span className="skeleton sk-line w-60" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          {(seg === "all" || seg === "owned") && renderSection("Owned by you", fOwned, "owned")}
+          {(seg === "all" || seg === "shared") && renderSection("Shared with you", fShared, "shared")}
+        </>
+      )}
 
-            <section>
-              <h2 className="section-title">Shared with me</h2>
-              {shared.length === 0 ? (
-                <p className="empty muted">
-                  Nothing shared with you yet. Ask another demo user to share a document with{" "}
-                  <strong>{user?.email}</strong>.
-                </p>
-              ) : (
-                <div className="card-grid">
-                  {shared.map((d) => (
-                    <DocCard key={d.id} doc={d} kind="shared" onDelete={deleteDoc} />
-                  ))}
-                </div>
-              )}
-            </section>
-          </>
-        )}
-      </main>
-    </div>
+      {confirm && <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />}
+    </Shell>
   );
 }

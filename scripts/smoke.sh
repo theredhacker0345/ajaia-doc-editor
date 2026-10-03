@@ -48,6 +48,22 @@ jsonget() { # python-expression over parsed body json
   python3 -c "import json,sys; d=json.load(open('$TMP/body')); print(eval(sys.argv[1]))" "$1"
 }
 
+# Solve the ALTCHA proof-of-work the same way the browser does: fetch a
+# challenge, brute-force SHA-256(salt+n) === challenge, emit the base64 payload.
+altcha_solve() {
+  curl -s "$BASE/api/altcha/challenge" | python3 -c '
+import json, sys, hashlib, base64
+ch = json.load(sys.stdin)
+salt, target, mx = ch["salt"], ch["challenge"], ch["maxnumber"]
+n = next((i for i in range(mx + 1) if hashlib.sha256(f"{salt}{i}".encode()).hexdigest() == target), None)
+if n is None:
+    sys.exit(1)
+payload = {"algorithm": ch["algorithm"], "challenge": target, "number": n,
+           "salt": salt, "signature": ch["signature"]}
+sys.stdout.write(base64.b64encode(json.dumps(payload).encode()).decode())
+'
+}
+
 # --- flow ------------------------------------------------------------------
 
 echo "Smoke-testing $BASE"
@@ -60,7 +76,29 @@ expect_contains "seeded user present" 'ubaid@aajaia.dev'
 
 expect "me without session -> 401" 401 "$(req GET /api/me anon.jar)"
 
-expect "login as ubaid" 200 "$(req POST /api/auth/login ubaid.jar '{"email":"ubaid@aajaia.dev"}')"
+# ALTCHA challenge endpoint (public, pre-auth)
+expect "altcha challenge endpoint" 200 "$(req GET /api/altcha/challenge anon.jar)"
+expect_contains "challenge carries difficulty" '"maxnumber"'
+expect_contains "challenge carries signature" '"signature"'
+
+# Login is refused without a solved proof-of-work
+expect "login without altcha -> 400" 400 "$(req POST /api/auth/login noaltcha.jar '{"email":"ubaid@aajaia.dev"}')"
+expect_contains "altcha error code returned" 'altcha_malformed'
+
+ALTCHA="$(altcha_solve)" || { echo "FAIL  altcha_solve helper"; exit 1; }
+expect "login as ubaid (with ALTCHA)" 200 "$(req POST /api/auth/login ubaid.jar "{\"email\":\"ubaid@aajaia.dev\",\"altcha\":\"$ALTCHA\"}")"
+
+# A solved challenge is single-use - replaying it must be rejected
+expect "replayed altcha -> 400" 400 "$(req POST /api/auth/login replay.jar "{\"email\":\"ubaid@aajaia.dev\",\"altcha\":\"$ALTCHA\"}")"
+
+# Profile endpoints
+expect "get profile" 200 "$(req GET /api/me/profile ubaid.jar)"
+expect_contains "profile carries stats" '"owned_docs"'
+expect_contains "profile carries member_since" '"member_since"'
+expect "update profile" 200 "$(req PATCH /api/me/profile ubaid.jar '{"name":"Ubaid ur Rehman","title":"Full Stack Developer","bio":"AI orchestrator building production-grade web software.","location":"Pakistan","website":"https://ubaid-ur-rehmanportfolio.vercel.app/"}')"
+expect_contains "profile persisted" 'Full Stack Developer'
+expect "invalid website -> 400" 400 "$(req PATCH /api/me/profile ubaid.jar '{"website":"definitely not a url"}')"
+expect "empty name -> 400" 400 "$(req PATCH /api/me/profile ubaid.jar '{"name":"   "}')"
 
 DOC_TITLE="Smoke Test Doc $(date +%s)"
 expect "create document" 201 "$(req POST /api/documents ubaid.jar "{\"title\":\"$DOC_TITLE\"}")"
@@ -95,7 +133,8 @@ expect_contains "downloaded bytes match" "smoke attachment content" "$TMP/dl.txt
 expect "reject disallowed type" 400 "$(req POST /api/documents/$DOC_ID/attachments ubaid.jar '')"
 
 # Second user: shared access semantics
-expect "login as aisha" 200 "$(req POST /api/auth/login aisha.jar '{"email":"aisha@aajaia.dev"}')"
+ALTCHA_AISHA="$(altcha_solve)" || { echo "FAIL  altcha_solve (aisha)"; exit 1; }
+expect "login as aisha (with ALTCHA)" 200 "$(req POST /api/auth/login aisha.jar "{\"email\":\"aisha@aajaia.dev\",\"altcha\":\"$ALTCHA_AISHA\"}")"
 expect "aisha lists shared docs" 200 "$(req GET /api/documents aisha.jar)"
 expect_contains "shared doc visible with editor role" '"my_role":"editor"'
 
@@ -106,7 +145,8 @@ expect "editor cannot delete" 403 "$(req DELETE /api/documents/$DOC_ID aisha.jar
 
 # Viewer role
 expect "ubaid shares with carlos as viewer" 200 "$(req POST /api/documents/$DOC_ID/share ubaid.jar '{"email":"carlos@aajaia.dev","role":"viewer"}')"
-expect "login as carlos" 200 "$(req POST /api/auth/login carlos.jar '{"email":"carlos@aajaia.dev"}')"
+ALTCHA_CARLOS="$(altcha_solve)" || { echo "FAIL  altcha_solve (carlos)"; exit 1; }
+expect "login as carlos (with ALTCHA)" 200 "$(req POST /api/auth/login carlos.jar "{\"email\":\"carlos@aajaia.dev\",\"altcha\":\"$ALTCHA_CARLOS\"}")"
 expect "viewer can read" 200 "$(req GET /api/documents/$DOC_ID carlos.jar)"
 expect "viewer cannot save" 403 "$(req PATCH /api/documents/$DOC_ID carlos.jar "$TIPTAP")"
 

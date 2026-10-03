@@ -24,7 +24,7 @@ Record with Loom (camera + screen). Rehearse once. Paste the unlisted link into 
 
 ## 2:50–3:30 — Attachments + engineering quality
 - Attach a small file, download it; mention the 2 MB cap and allowlist.
-- Quickly show: `npm test` (25 unit tests) and `npm run smoke` (38-check E2E API suite) — "the smoke suite covers editor/viewer/revoke semantics and caught two real bugs during development."
+- Quickly show: `npm test` (33 unit tests) and `npm run smoke` (51-check E2E API suite) — "the smoke suite covers editor/viewer/revoke semantics and caught two real bugs during development."
 
 ## 3:30–4:20 — Decisions, cuts, and AI
 - "Stack reasoning: Workers + D1 = single free-tier artifact; Hono is Workers-native; a SPA removes a whole deployment surface."

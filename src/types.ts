@@ -43,3 +43,26 @@ export interface DocDetail {
   shares: ShareInfo[];
   attachments: AttachmentMeta[];
 }
+
+export interface ProfileFields {
+  title: string;
+  bio: string;
+  location: string;
+  website: string;
+}
+
+export interface ProfileStats {
+  owned_docs: number;
+  shared_with_me: number;
+  grants_given: number;
+  collaborators: number;
+  attachments: number;
+}
+
+export interface ProfilePayload {
+  user: User;
+  profile: ProfileFields;
+  stats: ProfileStats;
+  recent: DocSummary[];
+  member_since: string;
+}

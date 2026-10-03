@@ -76,6 +76,31 @@ export function sanitizeFilename(name: string): string {
   return (cleaned || "file").slice(0, 120);
 }
 
+/** Collapse whitespace and length-cap free-text profile fields (title, bio, location). */
+export function sanitizeProfileText(raw: unknown, maxLen: number): string {
+  if (typeof raw !== "string") return "";
+  return raw.replace(/\s+/g, " ").trim().slice(0, maxLen);
+}
+
+/**
+ * Profile website field: "" clears the value, invalid input returns null,
+ * otherwise a normalized absolute https URL (scheme optional on input).
+ */
+export function sanitizeWebsite(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === "") return "";
+  if (typeof raw !== "string") return null;
+  const s = raw.trim().slice(0, 200);
+  if (!s) return "";
+  const candidate = /^https?:\/\//i.test(s) ? s : `https://${s}`;
+  try {
+    const url = new URL(candidate);
+    if (!url.hostname.includes(".")) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 /** Derive a human display name from an email local-part: aisha.khan@x.com -> "Aisha Khan". */
 export function nameFromEmail(email: string): string {
   const local = email.split("@")[0] ?? "";

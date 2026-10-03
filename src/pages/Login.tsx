@@ -1,14 +1,24 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import type { User } from "../types";
 import { initials } from "../lib/format";
+import { fetchChallenge, solveChallenge, encodePayload } from "../lib/altcha";
+import { IconCheckSimple, IconShield } from "../icons";
+
+type AltchaStatus = "solving" | "verified" | "error";
 
 /**
- * Mock-auth sign-in (explicitly allowed by the assignment):
- * one-click sign-in for seeded demo users, or create a new user with
- * name + email. No passwords by design - documented in ARCHITECTURE.md.
+ * Sign-in screen.
+ *
+ * Left: product story + a decorative mock editor. Right: one-click sign-in
+ * for seeded demo users, or create a new user with name + email.
+ *
+ * Every sign-in is protected by ALTCHA proof-of-work: the browser fetches a
+ * signed challenge on mount, solves it in a Web Worker, and submits the
+ * payload with the login request. Mock auth (no passwords) is an explicit
+ * assignment allowance - documented in ARCHITECTURE.md.
  */
 export default function Login() {
   const { login } = useAuth();
@@ -19,6 +29,28 @@ export default function Login() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [altchaStatus, setAltchaStatus] = useState<AltchaStatus>("solving");
+  const altchaPayload = useRef<string | null>(null);
+  const altchaAttempt = useRef(0);
+
+  const runAltcha = useCallback(async () => {
+    const attempt = ++altchaAttempt.current;
+    setAltchaStatus("solving");
+    try {
+      const challenge = await fetchChallenge();
+      const number = await solveChallenge(challenge);
+      if (attempt !== altchaAttempt.current) return; // a newer attempt superseded this one
+      altchaPayload.current = encodePayload(challenge, number);
+      setAltchaStatus("verified");
+    } catch {
+      if (attempt === altchaAttempt.current) setAltchaStatus("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void runAltcha();
+  }, [runAltcha]);
+
   useEffect(() => {
     api<{ users: User[] }>("/api/auth/users")
       .then((d) => setUsers(d.users))
@@ -26,13 +58,19 @@ export default function Login() {
   }, []);
 
   const signIn = async (targetEmail: string, targetName?: string) => {
+    if (altchaStatus !== "verified" || !altchaPayload.current) {
+      setError("Still verifying you are human - one moment.");
+      return;
+    }
     setError(null);
     setBusy(targetEmail);
     try {
-      await login(targetEmail, targetName);
+      await login(targetEmail, altchaPayload.current, targetName);
       navigate("/", { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed.");
+      // A consumed or expired challenge is the usual cause - refresh it.
+      void runAltcha();
     } finally {
       setBusy(null);
     }
@@ -44,71 +82,159 @@ export default function Login() {
     signIn(email.trim(), name.trim() || undefined);
   };
 
+  const altchaPill =
+    altchaStatus === "verified" ? (
+      <span className="save-pill saved" role="status">
+        <IconCheckSimple size={13} /> ALTCHA verified - human check passed
+      </span>
+    ) : altchaStatus === "error" ? (
+      <span className="save-pill error" role="status">
+        <IconShield size={13} /> Verification failed
+        <button type="button" className="btn ghost sm" onClick={() => void runAltcha()}>
+          Retry
+        </button>
+      </span>
+    ) : (
+      <span className="save-pill saving" role="status">
+        <span className="spinner" aria-hidden="true" /> Solving proof-of-work…
+      </span>
+    );
+
   return (
-    <main className="login-page">
-      <div className="login-card">
-        <div className="brand-row">
+    <main className="auth-page">
+      {/* ------- brand side ------- */}
+      <section className="auth-side">
+        <div className="sidebar-brand">
           <span className="brand-mark">A</span>
-          <h1>Ajaia Docs</h1>
+          <span>Ajaia Docs</span>
         </div>
-        <p className="login-sub">
-          A lightweight collaborative document editor.{" "}
-          <span className="muted">Full Stack Developer assignment - Ubaid ur Rehman.</span>
+
+        <p className="auth-eyebrow">Collaborative document editor</p>
+        <h1 className="auth-headline">
+          Write together.
+          <br />
+          Stay in flow.
+        </h1>
+        <p className="auth-sub">
+          Create rich documents, import existing files, share them with granular
+          viewer / editor roles - and never think about saving.
         </p>
 
-        <h2 className="login-heading">Sign in as a demo user</h2>
-        <div className="user-grid">
-          {users.map((u) => (
+        <ul className="auth-points">
+          <li className="auth-point">
+            <strong>Rich text, zero friction</strong>
+            <span>Formatting, headings and lists with instant autosave.</span>
+          </li>
+          <li className="auth-point">
+            <strong>Import anything</strong>
+            <span>.docx, .markdown and .txt files become editable documents.</span>
+          </li>
+          <li className="auth-point">
+            <strong>Share with confidence</strong>
+            <span>Server-enforced owner / editor / viewer permissions.</span>
+          </li>
+        </ul>
+
+        <div className="mock-editor" aria-hidden="true">
+          <div className="mock-toolbar">
+            <span className="mock-chip k">B</span>
+            <span className="mock-chip">I</span>
+            <span className="mock-chip">H1</span>
+            <span className="mock-chip">•</span>
+          </div>
+          <div className="skeleton mock-line w-90" />
+          <div className="skeleton mock-line w-75" />
+          <div className="skeleton mock-line w-80" />
+        </div>
+
+        <p className="auth-side-sub">
+          Built on Cloudflare Workers, D1, React and TipTap - Full Stack Developer
+          assignment by Ubaid ur Rehman.
+        </p>
+      </section>
+
+      {/* ------- sign-in card ------- */}
+      <section className="auth-panel">
+        <div className="auth-card">
+          <div className="auth-card-head">
+            <h2>Sign in</h2>
+            <p className="auth-sub">Pick a demo user, or bring your own email.</p>
+          </div>
+
+          <div className="user-grid">
+            {users.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                className="user-card"
+                onClick={() => signIn(u.email)}
+                disabled={busy !== null || altchaStatus !== "verified"}
+              >
+                <span className="avatar" style={{ background: u.color }}>
+                  {initials(u.name)}
+                </span>
+                <span className="user-card-text">
+                  <strong>{u.name}</strong>
+                  <span className="muted">{u.email}</span>
+                </span>
+                {busy === u.email ? (
+                  <span className="spinner" aria-label="Signing in" />
+                ) : (
+                  <span className="user-card-arrow" aria-hidden="true">→</span>
+                )}
+              </button>
+            ))}
+            {users.length === 0 && <p className="muted">Loading demo users…</p>}
+          </div>
+
+          <div className="auth-divider"><span>or create a new user</span></div>
+
+          <form className="auth-form" onSubmit={submitCustom}>
+            <div className="field">
+              <label className="label" htmlFor="login-name">Display name</label>
+              <input
+                id="login-name"
+                className="input"
+                type="text"
+                placeholder="Ada Lovelace"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+              />
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="login-email">Email address</label>
+              <input
+                id="login-email"
+                className="input"
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            {altchaPill}
+            {error && <p className="field-error">{error}</p>}
+
             <button
-              key={u.id}
-              type="button"
-              className="user-card"
-              onClick={() => signIn(u.email)}
-              disabled={busy !== null}
+              type="submit"
+              className="btn primary lg block"
+              disabled={busy !== null || altchaStatus !== "verified"}
             >
-              <span className="avatar" style={{ background: u.color }}>
-                {initials(u.name)}
-              </span>
-              <span className="user-card-text">
-                <strong>{u.name}</strong>
-                <span className="muted">{u.email}</span>
-              </span>
-              {busy === u.email && <span className="spinner" aria-label="Signing in" />}
+              {busy ? "Signing in…" : "Continue"}
             </button>
-          ))}
-          {users.length === 0 && <p className="muted">Loading demo users…</p>}
+          </form>
+
+          <p className="auth-foot muted">
+            Sessions are HMAC-signed, HTTP-only cookies. Sign-in is protected by
+            ALTCHA proof-of-work - no CAPTCHAs, no tracking, just a hash puzzle
+            your browser solves locally.
+          </p>
         </div>
-
-        <div className="login-divider"><span>or create a new user</span></div>
-
-        <form className="login-form" onSubmit={submitCustom}>
-          <input
-            type="text"
-            placeholder="Display name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-label="Display name"
-          />
-          <input
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            aria-label="Email address"
-            required
-          />
-          <button type="submit" className="btn primary" disabled={busy !== null}>
-            {busy ? "Signing in…" : "Continue"}
-          </button>
-        </form>
-
-        {error && <p className="form-error">{error}</p>}
-
-        <p className="login-footnote muted">
-          Mock auth for the assignment demo: sessions are signed HTTP-only cookies, there are no
-          passwords. Built with Cloudflare Workers, D1, React and TipTap.
-        </p>
-      </div>
+      </section>
     </main>
   );
 }
