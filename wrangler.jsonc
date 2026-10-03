@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ajaia-docs",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-08-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ajaia-docs",
+      // After `wrangler d1 create ajaia-docs`, paste the returned database_id here.
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  // Demo-grade: this signs session cookies. Change the value before deploying publicly.
+  // Production apps would move this to `wrangler secret put APP_SECRET`.
+  "vars": {
+    "APP_SECRET": "dev-secret-change-me-before-deploy"
+  }
+}

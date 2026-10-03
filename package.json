@@ -1,0 +1,48 @@
+{
+  "name": "ajaia-doc-editor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ajaia Docs - a lightweight collaborative document editor (AI-Native Full Stack Developer assignment)",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "npm run -s build && concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "wrangler dev --port 8787",
+    "dev:web": "vite",
+    "build": "vite build",
+    "deploy": "npm run build && wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "db:migrate:local": "wrangler d1 execute DB --local --file=./migrations/0001_init.sql",
+    "db:seed:local": "wrangler d1 execute DB --local --file=./migrations/seed.sql",
+    "db:migrate:remote": "wrangler d1 execute ajaia-docs --remote -y --file=./migrations/0001_init.sql",
+    "db:seed:remote": "wrangler d1 execute ajaia-docs --remote -y --file=./migrations/seed.sql",
+    "smoke": "bash scripts/smoke.sh"
+  },
+  "dependencies": {
+    "@tiptap/extension-placeholder": "^2.11.5",
+    "@tiptap/extension-underline": "^2.11.5",
+    "@tiptap/pm": "^2.11.5",
+    "@tiptap/react": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5",
+    "hono": "^4.6.14",
+    "mammoth": "^1.9.0",
+    "marked": "^12.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261001.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.0.0"
+  }
+}

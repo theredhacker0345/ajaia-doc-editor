@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.wrangler/
+.smoke-tmp/
+*.log
+.DS_Store
