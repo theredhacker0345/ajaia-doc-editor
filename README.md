@@ -1,8 +1,18 @@
 # Ajaia Docs
 
+![tests](https://img.shields.io/badge/tests-33%20unit%20%2B%2051%20smoke-brightgreen) ![stack](https://img.shields.io/badge/stack-Cloudflare%20Workers%20%2B%20D1%20%2B%20React%20%2B%20TipTap-blue) ![security](https://img.shields.io/badge/auth-HMAC%20sessions%20%2B%20ALTCHA%20PoW-purple) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
+
 A lightweight collaborative document editor built for the **Ajaia AI-Native Full Stack Developer assignment**. Create, edit, import, share, and attach — deployed as a single Cloudflare Worker with a D1 database, fully inside the free tier.
 
-**Live app:** _paste your `https://ajaia-docs.<your-subdomain>.workers.dev` URL here_
+**Live app:** will be posted here right after the Cloudflare deploy (steps below take ~2 minutes).
+
+| Login (ALTCHA-gated) | Dashboard |
+|---|---|
+| ![Login with ALTCHA proof-of-work](docs/screenshots/01-login-altcha.png) | ![Dashboard](docs/screenshots/02-dashboard.png) |
+
+| Editor + autosave | Profile |
+|---|---|
+| ![Editor](docs/screenshots/03-editor-writing.png) | ![Profile](docs/screenshots/05-profile.png) |
 
 ---
 
@@ -98,6 +108,7 @@ Then open the URL wrangler prints (`https://ajaia-docs.<your-subdomain>.workers.
 │   └── lib/               # ALTCHA solver (blob Web Worker), .txt/.md/.docx import, formatting
 ├── tests/                 # Vitest unit tests
 ├── scripts/smoke.sh       # end-to-end API smoke test
+├── docs/screenshots/      # UI screenshots (login, dashboard, editor, profile, mobile)
 ├── ARCHITECTURE.md        # design decisions, tradeoffs, scope cuts
 ├── AI_WORKFLOW.md         # how AI was used in this build
 └── SUBMISSION.md          # deliverables checklist
