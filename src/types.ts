@@ -15,6 +15,8 @@ export interface DocSummary {
   owner_color: string;
   created_at: string;
   updated_at: string;
+  /** Plain-text preview of the first ~140 characters (list endpoints). */
+  excerpt?: string;
   /** Present on owned docs: number of people the doc is shared with. */
   share_count?: number;
   /** Present on shared docs: my role. */
@@ -24,6 +26,10 @@ export interface DocSummary {
 export interface ShareInfo {
   user: User;
   role: "viewer" | "editor";
+  /** Editor-only privilege to invite others (visible to the owner). */
+  can_share?: boolean;
+  /** ISO timestamp after which the grant lapses; null = never. */
+  expires_at?: string | null;
   created_at?: string;
 }
 
@@ -36,10 +42,24 @@ export interface AttachmentMeta {
   created_at: string;
 }
 
+export interface DocVersionMeta {
+  version_no: number;
+  title: string;
+  created_at: string;
+  created_by: string;
+  created_by_name: string;
+}
+
+export interface DocVersion extends DocVersionMeta {
+  content: unknown;
+}
+
 export interface DocDetail {
   document: DocSummary & { content: unknown };
   myRole: "owner" | "editor" | "viewer";
   isOwner: boolean;
+  /** True when the current user may invite others (owner or privileged editor). */
+  canShare?: boolean;
   shares: ShareInfo[];
   attachments: AttachmentMeta[];
 }

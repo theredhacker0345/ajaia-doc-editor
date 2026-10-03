@@ -13,21 +13,28 @@
 
 import { Hono } from "hono";
 import type { Context } from "hono";
-import type { Env, ShareRoleRow } from "../env";
-import { resolveAccess } from "../permissions";
+import type { Env } from "../env";
+import { resolveAccess, type ShareGrant } from "../permissions";
 import { checkAttachment, sanitizeFilename } from "../validation";
 
-async function myRole(
+interface GrantRow {
+  role: "viewer" | "editor";
+  can_share: number;
+  expires_at: string | null;
+}
+
+async function myGrant(
   c: Context<Env>,
   documentId: string,
   userId: string
-): Promise<"viewer" | "editor" | null> {
+): Promise<ShareGrant | null> {
   const row = await c.env.DB.prepare(
-    "SELECT role FROM document_access WHERE document_id = ? AND user_id = ?"
+    "SELECT role, can_share, expires_at FROM document_access WHERE document_id = ? AND user_id = ?"
   )
     .bind(documentId, userId)
-    .first<ShareRoleRow>();
-  return row?.role ?? null;
+    .first<GrantRow>();
+  if (!row) return null;
+  return { role: row.role, canShare: row.can_share === 1, expiresAt: row.expires_at };
 }
 
 async function resolveDocAccess(c: Context<Env>, documentId: string) {
@@ -42,7 +49,7 @@ async function resolveDocAccess(c: Context<Env>, documentId: string) {
     access: resolveAccess({
       ownerId: doc.owner_id,
       userId: user.id,
-      shareRole: doc.owner_id === user.id ? null : await myRole(c, documentId, user.id),
+      share: doc.owner_id === user.id ? null : await myGrant(c, documentId, user.id),
     }),
   };
 }
@@ -150,7 +157,7 @@ attachmentRoutes.get("/:id/download", async (c) => {
   const access = resolveAccess({
     ownerId: row.doc_owner,
     userId: user.id,
-    shareRole: row.doc_owner === user.id ? null : await myRole(c, row.doc_id, user.id),
+    share: row.doc_owner === user.id ? null : await myGrant(c, row.doc_id, user.id),
   });
   if (!access.canView) return c.json({ error: "You do not have access to this file." }, 403);
 

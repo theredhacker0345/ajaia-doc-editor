@@ -44,6 +44,15 @@ expect_contains() { # name needle [file]
   fi
 }
 
+expect_not_contains() { # name needle [file]
+  local file="${3:-$TMP/body}"
+  if rg -q "$2" "$file" 2>/dev/null; then
+    FAIL=$((FAIL + 1)); echo "  FAIL  $1 (must not contain: $2)  body: $(head -c 160 "$file")"
+  else
+    PASS=$((PASS + 1)); echo "  PASS  $1"
+  fi
+}
+
 jsonget() { # python-expression over parsed body json
   python3 -c "import json,sys; d=json.load(open('$TMP/body')); print(eval(sys.argv[1]))" "$1"
 }
@@ -70,6 +79,7 @@ echo "Smoke-testing $BASE"
 
 expect "health endpoint" 200 "$(req GET /api/health anon.jar)"
 expect_contains "health payload ok" '"ok":true'
+expect_contains "health reports schema ready" '"ready":true'
 
 expect "public user list" 200 "$(req GET /api/auth/users anon.jar)"
 expect_contains "seeded user present" 'ubaid@aajaia.dev'
@@ -114,6 +124,18 @@ expect_contains "content persisted" '"Smoke Test Doc Renamed"'
 expect "patch without session -> 401" 401 "$(req PATCH /api/documents/$DOC_ID anon.jar "$TIPTAP")"
 expect "get unknown doc -> 404" 404 "$(req GET /api/documents/doc-unknown ubaid.jar)"
 
+# Version history: v1 snapshot exists from creation; restore rolls content back
+expect "version list" 200 "$(req GET /api/documents/$DOC_ID/versions ubaid.jar)"
+expect_contains "initial snapshot is version 1" '"version_no":1'
+expect "version detail" 200 "$(req GET /api/documents/$DOC_ID/versions/1 ubaid.jar)"
+expect "restore version 1" 200 "$(req POST /api/documents/$DOC_ID/versions/1/restore ubaid.jar)"
+expect "document after restore" 200 "$(req GET /api/documents/$DOC_ID ubaid.jar)"
+RESTORED="$(jsonget "len(d['document']['content']['content'])==1 and d['document']['content']['content'][0]['type']=='paragraph'")"
+expect "restored content is the initial snapshot" "True" "$RESTORED"
+expect_not_contains "heading is gone after restore" '"heading"'
+expect "re-save content after restore" 200 "$(req PATCH /api/documents/$DOC_ID ubaid.jar "$TIPTAP")"
+expect "version detail of unknown version -> 404" 404 "$(req GET /api/documents/$DOC_ID/versions/99 ubaid.jar)"
+
 expect "share with aisha as editor" 200 "$(req POST /api/documents/$DOC_ID/share ubaid.jar '{"email":"aisha@aajaia.dev","role":"editor"}')"
 expect "sharing with owner email -> 400" 400 "$(req POST /api/documents/$DOC_ID/share ubaid.jar '{"email":"ubaid@aajaia.dev","role":"editor"}')"
 expect "share with bad role -> 400" 400 "$(req POST /api/documents/$DOC_ID/share ubaid.jar '{"email":"someone@x.dev","role":"admin"}')"
@@ -149,6 +171,28 @@ ALTCHA_CARLOS="$(altcha_solve)" || { echo "FAIL  altcha_solve (carlos)"; exit 1;
 expect "login as carlos (with ALTCHA)" 200 "$(req POST /api/auth/login carlos.jar "{\"email\":\"carlos@aajaia.dev\",\"altcha\":\"$ALTCHA_CARLOS\"}")"
 expect "viewer can read" 200 "$(req GET /api/documents/$DOC_ID carlos.jar)"
 expect "viewer cannot save" 403 "$(req PATCH /api/documents/$DOC_ID carlos.jar "$TIPTAP")"
+
+# v3 sharing: invite privilege, expiry, role edits, ownership transfer
+expect "owner grants carlos editor + can-share" 200 "$(req POST /api/documents/$DOC_ID/share ubaid.jar '{"email":"carlos@aajaia.dev","role":"editor","can_share":true}')"
+expect "privileged editor invites priya" 200 "$(req POST /api/documents/$DOC_ID/share carlos.jar '{"email":"priya@aajaia.dev","role":"viewer"}')"
+expect "carlos can see the sharing list" 200 "$(req GET /api/documents/$DOC_ID/shares carlos.jar)"
+expect_contains "priya is in the list" 'priya@aajaia.dev'
+
+expect "owner demotes aisha to viewer" 200 "$(req PATCH /api/documents/$DOC_ID/share/u-aisha ubaid.jar '{"role":"viewer"}')"
+expect "demoted aisha cannot save -> 403" 403 "$(req PATCH /api/documents/$DOC_ID aisha.jar "$TIPTAP")"
+expect "owner restores aisha editor" 200 "$(req PATCH /api/documents/$DOC_ID/share/u-aisha ubaid.jar '{"role":"editor"}')"
+
+expect "owner expires carlos grant" 200 "$(req PATCH /api/documents/$DOC_ID/share/u-carlos ubaid.jar '{"expires_at":"2020-01-01T00:00:00.000Z"}')"
+expect "expired carlos -> 403" 403 "$(req GET /api/documents/$DOC_ID carlos.jar)"
+expect "clears carlos expiry" 200 "$(req PATCH /api/documents/$DOC_ID/share/u-carlos ubaid.jar '{"expires_at":null}')"
+expect "carlos restored after clearing expiry" 200 "$(req GET /api/documents/$DOC_ID carlos.jar)"
+
+expect "ownership transfer to aisha" 200 "$(req POST /api/documents/$DOC_ID/transfer ubaid.jar '{"email":"aisha@aajaia.dev"}')"
+expect "former owner cannot rename" 403 "$(req PATCH /api/documents/$DOC_ID ubaid.jar '{"title":"Nope"}')"
+expect "new owner renames" 200 "$(req PATCH /api/documents/$DOC_ID aisha.jar '{"title":"Smoke Test Doc Renamed"}')"
+expect "transfer back to ubaid" 200 "$(req POST /api/documents/$DOC_ID/transfer aisha.jar '{"email":"ubaid@aajaia.dev"}')"
+expect "ubaid owns again" 200 "$(req PATCH /api/documents/$DOC_ID ubaid.jar '{"title":"Smoke Test Doc Renamed"}')"
+expect "transfer with invalid email -> 400" 400 "$(req POST /api/documents/$DOC_ID/transfer ubaid.jar '{"email":"not-an-email"}')"
 
 # Revoke + cleanup
 expect "ubaid revokes carlos" 200 "$(req DELETE /api/documents/$DOC_ID/share/u-carlos ubaid.jar)"

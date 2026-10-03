@@ -11,6 +11,19 @@ import { IMPORT_ACCEPT, fileToDocContent } from "../lib/importFile";
 import { IconFileText, IconPlus, IconSearch, IconTrash, IconUpload } from "../icons";
 
 type Seg = "all" | "owned" | "shared";
+type SortKey = "recent" | "title" | "oldest";
+
+const SORTERS: Record<SortKey, (a: DocSummary, b: DocSummary) => number> = {
+  recent: (a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at),
+  oldest: (a, b) => Date.parse(a.updated_at) - Date.parse(b.updated_at),
+  title: (a, b) => a.title.localeCompare(b.title),
+};
+
+const SORT_LABEL: Record<SortKey, string> = {
+  recent: "Recently edited",
+  title: "Title A–Z",
+  oldest: "Oldest first",
+};
 
 function DocCard({
   doc,
@@ -38,6 +51,12 @@ function DocCard({
       <h3 className="doc-card-title">
         <Link to={`/doc/${doc.id}`}>{doc.title}</Link>
       </h3>
+
+      {doc.excerpt ? (
+        <p className="doc-card-excerpt">{doc.excerpt}</p>
+      ) : (
+        <p className="doc-card-excerpt muted">No content yet — open to start writing.</p>
+      )}
 
       <p className="doc-card-meta">
         {kind === "shared" ? (
@@ -80,6 +99,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [seg, setSeg] = useState<Seg>("all");
   const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("recent");
   const [importing, setImporting] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
@@ -130,7 +150,7 @@ export default function Dashboard() {
   const askDelete = (doc: DocSummary) => {
     setConfirm({
       title: "Delete document",
-      body: `"${doc.title}" will be permanently removed, along with its attachments and sharing access for everyone.`,
+      body: `"${doc.title}" will be permanently removed, along with its attachments, version history and sharing access for everyone.`,
       confirmLabel: "Delete",
       onConfirm: async () => {
         await api(`/api/documents/${doc.id}`, { method: "DELETE" });
@@ -142,11 +162,12 @@ export default function Dashboard() {
   };
 
   const q = query.trim().toLowerCase();
+  const sortFn = SORTERS[sortKey];
   const filter = (list: DocSummary[]) =>
-    q ? list.filter((d) => d.title.toLowerCase().includes(q)) : list;
+    (q ? list.filter((d) => d.title.toLowerCase().includes(q)) : list).sort(sortFn);
 
-  const fOwned = useMemo(() => filter(owned), [owned, q]); // eslint-disable-line react-hooks/exhaustive-deps
-  const fShared = useMemo(() => filter(shared), [shared, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fOwned = useMemo(() => filter(owned), [owned, q, sortFn]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fShared = useMemo(() => filter(shared), [shared, q, sortFn]); // eslint-disable-line react-hooks/exhaustive-deps
   const total = owned.length + shared.length;
 
   const renderGrid = (list: DocSummary[], kind: "owned" | "shared") => (
@@ -171,7 +192,7 @@ export default function Dashboard() {
               ? "Try a different search term."
               : kind === "owned"
                 ? "Create a blank document, or import a .txt / .md / .docx file to get started."
-                : `Ask another demo user to share a document with ${user?.email}.`}
+                : `Ask someone to share a document with ${user?.email} — it will appear here the moment they do.`}
           </p>
           {!q && kind === "owned" && (
             <button type="button" className="btn primary sm" onClick={newDoc}>
@@ -226,6 +247,16 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+          <select
+            className="select"
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            aria-label="Sort documents"
+          >
+            {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+              <option key={k} value={k}>{SORT_LABEL[k]}</option>
+            ))}
+          </select>
           <button
             type="button"
             className="btn"

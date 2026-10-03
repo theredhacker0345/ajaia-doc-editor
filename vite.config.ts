@@ -17,5 +17,14 @@ export default defineConfig({
   build: {
     outDir: "dist",
     chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        // Keep the framework code in its own cacheable chunk; route chunks
+        // (editor/tiptap, parsers) split automatically via dynamic imports.
+        manualChunks: {
+          "react-vendor": ["react", "react-dom", "react-router-dom"],
+        },
+      },
+    },
   },
 });

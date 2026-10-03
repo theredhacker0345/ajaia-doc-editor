@@ -4,27 +4,32 @@
  * Parsing happens entirely in the browser (mammoth + marked + an offscreen
  * TipTap editor). The API only ever receives normalized TipTap JSON, which
  * keeps the backend simple and avoids server-side Office/Markdown parsing.
+ *
+ * All heavy parsers are dynamically imported so they stay out of the initial
+ * bundle and only load when the user actually imports a file (LCP budget).
  */
 
-import * as mammothNs from "mammoth";
-import { marked } from "marked";
-import { Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
-
-const mammoth = ((mammothNs as Record<string, unknown>).default ?? mammothNs) as {
-  convertToHtml: (input: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string; messages: unknown[] }>;
-};
+import type { Editor } from "@tiptap/react";
 
 let converter: Editor | null = null;
 
-/** Convert an HTML string into a TipTap document using an offscreen editor. */
-function htmlToTiptapDoc(html: string): object {
+async function getConverter(): Promise<Editor> {
   if (!converter) {
-    converter = new Editor({ extensions: [StarterKit, Underline] });
+    const [{ Editor: E }, { default: StarterKit }, { default: Underline }] = await Promise.all([
+      import("@tiptap/react"),
+      import("@tiptap/starter-kit"),
+      import("@tiptap/extension-underline"),
+    ]);
+    converter = new E({ extensions: [StarterKit, Underline] });
   }
-  converter.commands.setContent(html, false);
-  return converter.getJSON();
+  return converter;
+}
+
+/** Convert an HTML string into a TipTap document using an offscreen editor. */
+async function htmlToTiptapDoc(html: string): Promise<object> {
+  const editor = await getConverter();
+  editor.commands.setContent(html, false);
+  return editor.getJSON();
 }
 
 function escapeHtml(s: string): string {
@@ -51,18 +56,23 @@ export async function fileToDocContent(
   const baseTitle = (dot === -1 ? name : name.slice(0, dot)).replace(/[_-]+/g, " ").trim();
 
   if (ext === "docx") {
+    const mod = await import("mammoth");
+    const mammoth = ((mod as unknown as Record<string, unknown>).default ?? mod) as {
+      convertToHtml: (input: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string; messages: unknown[] }>;
+    };
     const { value } = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
-    return { title: baseTitle || "Imported document", content: htmlToTiptapDoc(value || "<p></p>") };
+    return { title: baseTitle || "Imported document", content: await htmlToTiptapDoc(value || "<p></p>") };
   }
 
   if (ext === "md" || ext === "markdown") {
+    const { marked } = await import("marked");
     const html = await marked.parse(await file.text());
-    return { title: baseTitle || "Imported document", content: htmlToTiptapDoc(html) };
+    return { title: baseTitle || "Imported document", content: await htmlToTiptapDoc(html) };
   }
 
   if (ext === "txt") {
     const html = txtToHtml(await file.text());
-    return { title: baseTitle || "Imported document", content: htmlToTiptapDoc(html) };
+    return { title: baseTitle || "Imported document", content: await htmlToTiptapDoc(html) };
   }
 
   throw new Error(`Unsupported file type ".${ext}". Supported: .txt, .md, .docx`);

@@ -111,16 +111,25 @@ try {
     log("wrangler.jsonc: database_id wired for this deploy.");
   }
 
-  // --- 3. Migrations + seed (idempotent) ----------------------------------
+  // --- 3. Migrations + seed (idempotent; each gated migration runs exactly once) ---
   run(["d1", "execute", DB_NAME, "--remote", "-y", "--file", "./migrations/0001_init.sql"], "migration 0001");
   log("migration 0001 (schema) applied/verified.");
 
-  const hasProfile = scalar("SELECT COUNT(*) AS c FROM pragma_table_info('users') WHERE name='bio'") > 0;
-  if (hasProfile) {
+  const columnExists = (table, column) =>
+    scalar(`SELECT COUNT(*) AS c FROM pragma_table_info('${table}') WHERE name='${column}'`) > 0;
+
+  if (columnExists("users", "bio")) {
     log("migration 0002 (profile + ALTCHA ledger) already applied — skipped.");
   } else {
     run(["d1", "execute", DB_NAME, "--remote", "-y", "--file", "./migrations/0002_profile.sql"], "migration 0002");
     log("migration 0002 (profile + ALTCHA ledger) applied.");
+  }
+
+  if (columnExists("document_access", "can_share")) {
+    log("migration 0003 (version history + sharing) already applied — skipped.");
+  } else {
+    run(["d1", "execute", DB_NAME, "--remote", "-y", "--file", "./migrations/0003_versions_sharing.sql"], "migration 0003");
+    log("migration 0003 (version history + sharing) applied.");
   }
 
   const userCount = scalar("SELECT COUNT(*) AS c FROM users");

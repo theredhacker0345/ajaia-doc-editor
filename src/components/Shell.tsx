@@ -66,6 +66,11 @@ export default function Shell({
               </span>
             </Link>
           )}
+          <nav className="legal-links" aria-label="Legal">
+            <Link to="/privacy">Privacy</Link>
+            <span aria-hidden="true">·</span>
+            <Link to="/terms">Terms</Link>
+          </nav>
           <button type="button" className="sidebar-signout" onClick={signout} disabled={signingOut}>
             <IconLogout />
             <span>{signingOut ? "Signing out…" : "Sign out"}</span>

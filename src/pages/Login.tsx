@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import type { User } from "../types";
@@ -233,6 +233,12 @@ export default function Login() {
             ALTCHA proof-of-work - no CAPTCHAs, no tracking, just a hash puzzle
             your browser solves locally.
           </p>
+
+          <nav className="legal-links" aria-label="Legal">
+            <Link to="/privacy">Privacy Policy</Link>
+            <span aria-hidden="true">·</span>
+            <Link to="/terms">Terms of Service</Link>
+          </nav>
         </div>
       </section>
     </main>

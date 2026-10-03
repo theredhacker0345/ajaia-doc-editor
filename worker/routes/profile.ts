@@ -44,7 +44,9 @@ profile.get("/profile", async (c) => {
   // One round trip: five counters + the recent-documents list.
   const [owned, shared, grants, collabs, atts, recent] = await c.env.DB.batch([
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM documents WHERE owner_id = ?").bind(user.id),
-    c.env.DB.prepare("SELECT COUNT(*) AS n FROM document_access WHERE user_id = ?").bind(user.id),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM document_access WHERE user_id = ? AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+    ).bind(user.id),
     c.env.DB.prepare(
       `SELECT COUNT(*) AS n FROM document_access da
        JOIN documents d ON d.id = da.document_id WHERE d.owner_id = ?`

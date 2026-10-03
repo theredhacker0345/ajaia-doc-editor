@@ -40,9 +40,26 @@ app.use("/api/*", async (c, next) => {
 });
 
 /* Public routes first: health + ALTCHA challenge must be reachable pre-auth. */
-app.get("/api/health", (c) =>
-  c.json({ ok: true, service: "ajaia-docs", time: new Date().toISOString() })
-);
+app.get("/api/health", async (c) => {
+  // Report schema readiness so deployment/provisioning issues are visible
+  // without authenticating (no user data is exposed).
+  let tables: string[] = [];
+  try {
+    const { results } = await c.env.DB.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN
+       ('users','documents','document_access','attachments','doc_versions','altcha_seen')`
+    ).all<{ name: string }>();
+    tables = (results ?? []).map((r) => r.name);
+  } catch {
+    return c.json({ ok: false, service: "ajaia-docs", db: "unreachable", time: new Date().toISOString() }, 503);
+  }
+  return c.json({
+    ok: true,
+    service: "ajaia-docs",
+    db: { ready: tables.length >= 6, tables },
+    time: new Date().toISOString(),
+  });
+});
 app.route("/api/altcha", altchaRoutes);
 
 /* Session gate for everything else under /api. */

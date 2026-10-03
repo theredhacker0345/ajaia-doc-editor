@@ -11,9 +11,12 @@ import type { DocDetail } from "../types";
 import Toolbar from "../components/Toolbar";
 import ShareModal from "../components/ShareModal";
 import Attachments from "../components/Attachments";
+import HistoryPanel from "../components/HistoryPanel";
 import { timeAgo, initials } from "../lib/format";
+import { docToHtml, docToMarkdown, downloadBlob, printAsPdf, type Node } from "../lib/exportDoc";
 import {
   IconArrowRight,
+  IconClock,
   IconDownload,
   IconEye,
   IconPaperclip,
@@ -27,60 +30,6 @@ const SAVE_LABEL: Record<string, string> = {
   error: "Save failed",
 };
 
-/* ---------- TipTap JSON -> Markdown (for the export button) ---------- */
-
-function inlineText(node: { content?: Array<Record<string, unknown>> }): string {
-  return (node.content ?? [])
-    .map((child) => {
-      if (child.type === "hardBreak") return "\n";
-      let text = typeof child.text === "string" ? child.text : "";
-      const marks = (child.marks ?? []) as Array<{ type: string }>;
-      for (const m of marks) {
-        if (m.type === "bold") text = `**${text}**`;
-        if (m.type === "italic") text = `*${text}*`;
-        if (m.type === "code") text = `\`${text}\``;
-      }
-      return text;
-    })
-    .join("");
-}
-
-function docToMarkdown(node: Record<string, unknown>): string {
-  const blocks = (node.content ?? []) as Array<Record<string, unknown>>;
-  const lines: string[] = [];
-
-  for (const block of blocks) {
-    switch (block.type) {
-      case "heading": {
-        const level = (block.attrs as { level?: number } | undefined)?.level ?? 1;
-        lines.push(`${"#".repeat(level)} ${inlineText(block)}`);
-        break;
-      }
-      case "bulletList": {
-        for (const item of (block.content ?? []) as Array<Record<string, unknown>>) {
-          lines.push(`- ${inlineText(item)}`);
-        }
-        break;
-      }
-      case "orderedList": {
-        ((block.content ?? []) as Array<Record<string, unknown>>).forEach((item, i) => {
-          lines.push(`${i + 1}. ${inlineText(item)}`);
-        });
-        break;
-      }
-      case "blockquote":
-        lines.push(`> ${inlineText(block)}`);
-        break;
-      case "codeBlock":
-        lines.push("```\n" + inlineText(block) + "\n```");
-        break;
-      default:
-        lines.push(inlineText(block));
-    }
-  }
-  return lines.join("\n\n");
-}
-
 /* ---------- page ---------- */
 
 export default function DocPage() {
@@ -93,6 +42,8 @@ export default function DocPage() {
   const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">("saved");
   const [shareOpen, setShareOpen] = useState(false);
   const [attOpen, setAttOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [stats, setStats] = useState({ words: 0, chars: 0 });
 
   /* --- autosave engine: debounce + in-flight dedupe + stale-write guard ---
@@ -252,18 +203,23 @@ export default function DocPage() {
     }
   };
 
+  /* ---------- export (Markdown + PDF via print pipeline) ---------- */
+
+  const safeName = () =>
+    (detail?.document.title ?? "document").replace(/[\\/:*?"<>|]+/g, "").trim() || "document";
+
   const exportMd = () => {
     if (!editor || !detail) return;
-    const md = `# ${detail.document.title}\n\n${docToMarkdown(editor.getJSON())}\n`;
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${detail.document.title.replace(/[\\/:*?"<>|]+/g, "").trim() || "document"}.md`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const md = `# ${detail.document.title}\n\n${docToMarkdown(editor.getJSON() as Node)}\n`;
+    downloadBlob(new Blob([md], { type: "text/markdown;charset=utf-8" }), `${safeName()}.md`);
+    setExportOpen(false);
+    toast("Markdown exported.", "ok");
+  };
+
+  const exportPdf = () => {
+    if (!editor || !detail) return;
+    printAsPdf(docToHtml(editor.getJSON() as Node), detail.document.title);
+    setExportOpen(false);
   };
 
   if (error) {
@@ -324,7 +280,7 @@ export default function DocPage() {
         </div>
 
         <div className="topbar-group">
-          {detail.isOwner && detail.shares.length > 0 && (
+          {detail.canShare && detail.shares.length > 0 && (
             <span className="avatar-stack" title={`${detail.shares.length} people have access`}>
               {detail.shares.slice(0, 3).map((s) => (
                 <span
@@ -346,18 +302,46 @@ export default function DocPage() {
               {detail.myRole === "editor" ? "You can edit" : "View-only"}
             </span>
           )}
+          <button type="button" className="btn ghost sm" onClick={() => setHistoryOpen((v) => !v)} title="Version history">
+            <IconClock /> History
+          </button>
           <button
             type="button"
             className={`btn ghost sm${attOpen ? " active" : ""}`}
             onClick={() => setAttOpen((v) => !v)}
             aria-pressed={attOpen}
+            title="Attachments"
           >
             <IconPaperclip /> {detail.attachments.length}
           </button>
-          <button type="button" className="btn ghost sm" onClick={exportMd} title="Export as Markdown">
-            <IconDownload />
-          </button>
-          {detail.isOwner && (
+
+          <div className="export-wrap">
+            <button
+              type="button"
+              className={`btn ghost sm${exportOpen ? " active" : ""}`}
+              onClick={() => setExportOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={exportOpen}
+              title="Export"
+            >
+              <IconDownload /> Export
+            </button>
+            {exportOpen && (
+              <>
+                <div className="menu-overlay" onClick={() => setExportOpen(false)} />
+                <div className="export-menu" role="menu" aria-label="Export document">
+                  <button type="button" role="menuitem" onClick={exportMd}>
+                    <IconDownload /> Markdown (.md)
+                  </button>
+                  <button type="button" role="menuitem" onClick={exportPdf}>
+                    <IconDownload /> PDF (print dialog)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {(detail.isOwner || detail.canShare) && (
             <button type="button" className="btn primary sm" onClick={() => setShareOpen(true)}>
               <IconShare /> Share
             </button>
@@ -388,6 +372,14 @@ export default function DocPage() {
             onChanged={() => reload().catch(() => {})}
           />
         )}
+        {historyOpen && (
+          <HistoryPanel
+            docId={detail.document.id}
+            canEdit={canEdit}
+            onClose={() => setHistoryOpen(false)}
+            onRestored={() => reload().catch(() => {})}
+          />
+        )}
       </main>
 
       <footer className="statusbar">
@@ -407,6 +399,8 @@ export default function DocPage() {
         <ShareModal
           docId={detail.document.id}
           shares={detail.shares}
+          isOwner={detail.isOwner}
+          canShare={detail.canShare ?? detail.isOwner}
           onClose={() => setShareOpen(false)}
           onChanged={() => reload().catch(() => {})}
         />

@@ -1,10 +1,10 @@
 # Ajaia Docs
 
-![tests](https://img.shields.io/badge/tests-33%20unit%20%2B%2051%20smoke-brightgreen) ![stack](https://img.shields.io/badge/stack-Cloudflare%20Workers%20%2B%20D1%20%2B%20React%20%2B%20TipTap-blue) ![security](https://img.shields.io/badge/auth-HMAC%20sessions%20%2B%20ALTCHA%20PoW-purple) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
+[![Live](https://img.shields.io/badge/_%F0%9F%9A%80_Live-ajaia--doc--editor.arifubaid0345.workers.dev-5457d6)](https://ajaia-doc-editor.arifubaid0345.workers.dev/login) ![tests](https://img.shields.io/badge/tests-50%20unit%20%2B%2051%20smoke-brightgreen) ![stack](https://img.shields.io/badge/stack-Cloudflare%20Workers%20%2B%20D1%20%2B%20React%20%2B%20TipTap-blue) ![security](https://img.shields.io/badge/auth-HMAC%20sessions%20%2B%20ALTCHA%20PoW-purple) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
 A lightweight collaborative document editor built for the **Ajaia AI-Native Full Stack Developer assignment**. Create, edit, import, share, and attach — deployed as a single Cloudflare Worker with a D1 database, fully inside the free tier.
 
-**Live app:** will be posted here right after the Cloudflare deploy (steps below take ~2 minutes).
+**Live app: https://ajaia-doc-editor.arifubaid0345.workers.dev/login**
 
 | Login (ALTCHA-gated) | Dashboard |
 |---|---|
