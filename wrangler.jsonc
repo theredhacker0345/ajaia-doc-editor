@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ajaia-docs",
+  "name": "ajaia-doc-editor",
   "main": "worker/index.ts",
   "compatibility_date": "2025-08-01",
   "assets": {
@@ -13,13 +13,12 @@
     {
       "binding": "DB",
       "database_name": "ajaia-docs",
-      // After `wrangler d1 create ajaia-docs`, paste the returned database_id here.
+      // After creating the D1 database (dashboard or `wrangler d1 create ajaia-docs`),
+      // paste its database_id here.
       "database_id": "00000000-0000-0000-0000-000000000000"
     }
-  ],
-  // Demo-grade: this signs session cookies. Change the value before deploying publicly.
-  // Production apps would move this to `wrangler secret put APP_SECRET`.
-  "vars": {
-    "APP_SECRET": "dev-secret-change-me-before-deploy"
-  }
+  ]
+  // APP_SECRET is intentionally NOT here — set it as a real Secret so it is never
+  // committed: dashboard -> Worker -> Settings -> Variables and Secrets, or
+  // `npx wrangler secret put APP_SECRET`. For local dev, copy .dev.vars.example to .dev.vars.
 }

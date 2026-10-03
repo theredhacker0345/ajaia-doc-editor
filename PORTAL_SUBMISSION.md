@@ -1,7 +1,7 @@
 Ajaia Docs — AI-Native Full Stack Developer Assignment
 Candidate: Ubaid ur Rehman (arifubaid0345@gmail.com)
 
-Live app: https://ajaia-docs.<REPLACE-WITH-YOUR-SUBDOMAIN>.workers.dev
+Live app: https://ajaia-doc-editor.<REPLACE-WITH-YOUR-SUBDOMAIN>.workers.dev
 Source code: [Google Drive folder link]
 Walkthrough video: [REPLACE with your Loom/YouTube link]
 

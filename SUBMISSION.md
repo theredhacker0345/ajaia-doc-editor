@@ -13,7 +13,7 @@
 | 3 | Architecture note | `ARCHITECTURE.md` |
 | 4 | AI workflow note | `AI_WORKFLOW.md` |
 | 5 | This manifest | `SUBMISSION.md` |
-| 6 | Live deployment | ⬜ `https://ajaia-docs.<subdomain>.workers.dev` |
+| 6 | Live deployment | ⬜ `https://ajaia-doc-editor.<subdomain>.workers.dev` |
 | 7 | Walkthrough video (3–5 min) | ⬜ paste Loom/YouTube URL (also in `video-link.txt`) |
 | 8 | Automated tests | `npm test` (33 unit) + `npm run smoke` (51 E2E checks) |
 

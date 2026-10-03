@@ -45,6 +45,7 @@ Prereqs: Node 18+, npm. (A Cloudflare account is only needed for deployment.)
 
 ```bash
 npm install
+cp .dev.vars.example .dev.vars   # local signing secret for wrangler dev (gitignored)
 npm run db:migrate:local   # apply D1 migrations 0001 (schema) + 0002 (profile + ALTCHA ledger)
 npm run db:seed:local      # insert demo users
 npm run dev                # builds once, then runs API (8787) + Vite (5173)
@@ -76,6 +77,17 @@ The smoke suite covers the full surface: ALTCHA challenge + login rejection with
 
 ## Deploy to Cloudflare
 
+### Path A — dashboard + GitHub CI (no local tooling needed)
+
+1. **Create the database:** Cloudflare dashboard → *Storage & Databases → D1 → Create* → name it exactly `ajaia-docs` → copy the **Database ID**.
+2. **Wire it up:** edit `wrangler.jsonc` in this repo on GitHub (pencil icon) → replace the placeholder `00000000-0000-0000-0000-000000000000` with your Database ID → commit to `main` → Workers Builds redeploys automatically and succeeds.
+3. **Migrate + seed:** dashboard → D1 → `ajaia-docs` → *Console* → paste & run, in order:
+   `migrations/0001_init.sql` → `migrations/0002_profile.sql` (run **once**) → `migrations/seed.sql`.
+4. **Set the signing secret:** dashboard → *Workers → ajaia-doc-editor → Settings → Variables and Secrets* → add **Secret** `APP_SECRET` = any long random string.
+5. Open `https://ajaia-doc-editor.<your-subdomain>.workers.dev` and sign in as a demo user.
+
+### Path B — Wrangler CLI
+
 ```bash
 npx wrangler login                          # one-time auth
 npx wrangler d1 create ajaia-docs           # copy the database_id it prints
@@ -84,11 +96,10 @@ npx wrangler d1 create ajaia-docs           # copy the database_id it prints
 npm run db:migrate:remote                   # apply migrations 0001 + 0002 in production D1
 npm run db:seed:remote                      # seed demo users
 npm run deploy                              # build + deploy Worker + assets
+npx wrangler secret put APP_SECRET          # paste a long random string when prompted
 ```
 
-Then open the URL wrangler prints (`https://ajaia-docs.<your-subdomain>.workers.dev`).
-
-> Change `APP_SECRET` in `wrangler.jsonc` to any long random string before deploying (or wire it up as a proper secret — see ARCHITECTURE.md).
+> `APP_SECRET` signs session cookies and ALTCHA challenges. It is deliberately **not** in `wrangler.jsonc` (nothing secret should be committed) — set it as a Secret per Path A step 4 or the CLI command above; local dev uses the gitignored `.dev.vars` (see Quick start).
 
 ## Project layout
 

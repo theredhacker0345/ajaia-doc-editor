@@ -1,0 +1,6 @@
+# Local development secrets (wrangler dev reads this file; it is gitignored).
+# Copy this file to .dev.vars:  cp .dev.vars.example .dev.vars
+# In production, set APP_SECRET as a real Secret instead:
+#   dashboard -> Worker -> Settings -> Variables and Secrets
+#   or: npx wrangler secret put APP_SECRET
+APP_SECRET=dev-secret-change-me-before-deploy
