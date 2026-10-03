@@ -122,29 +122,43 @@ export default function Login() {
 
         <ul className="auth-points">
           <li className="auth-point">
-            <strong>Rich text, zero friction</strong>
-            <span>Formatting, headings and lists with instant autosave.</span>
+            <span className="point-check" aria-hidden="true">✓</span>
+            <div className="auth-point-text">
+              <strong>Rich text, zero friction</strong>
+              <span>Formatting, headings and lists with instant autosave.</span>
+            </div>
           </li>
           <li className="auth-point">
-            <strong>Import anything</strong>
-            <span>.docx, .markdown and .txt files become editable documents.</span>
+            <span className="point-check" aria-hidden="true">✓</span>
+            <div className="auth-point-text">
+              <strong>Import anything</strong>
+              <span>.docx, .markdown and .txt files become editable documents.</span>
+            </div>
           </li>
           <li className="auth-point">
-            <strong>Share with confidence</strong>
-            <span>Server-enforced owner / editor / viewer permissions.</span>
+            <span className="point-check" aria-hidden="true">✓</span>
+            <div className="auth-point-text">
+              <strong>Share with confidence</strong>
+              <span>Server-enforced owner / editor / viewer permissions.</span>
+            </div>
           </li>
         </ul>
 
         <div className="mock-editor" aria-hidden="true">
+          <span className="mock-chip">✓ autosaved</span>
           <div className="mock-toolbar">
-            <span className="mock-chip k">B</span>
-            <span className="mock-chip">I</span>
-            <span className="mock-chip">H1</span>
-            <span className="mock-chip">•</span>
+            <span className="mock-key">B</span>
+            <span className="mock-key">I</span>
+            <span className="mock-key">H1</span>
+            <span className="mock-key">•</span>
           </div>
-          <div className="skeleton mock-line w-90" />
-          <div className="skeleton mock-line w-75" />
-          <div className="skeleton mock-line w-80" />
+          <p className="mock-title">Q3 planning notes</p>
+          <p className="mock-text">
+            Drafted together in real time — headings, lists and{" "}
+            <span className="mock-mark">highlights</span> stay in sync for every
+            editor on the document.
+          </p>
+          <p className="mock-meta">Shared with 3 editors · roles enforced server-side</p>
         </div>
 
         <p className="auth-side-sub">
