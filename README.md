@@ -77,16 +77,18 @@ The smoke suite covers the full surface: ALTCHA challenge + login rejection with
 
 ## Deploy to Cloudflare
 
-### Path A — dashboard + GitHub CI (no local tooling needed)
+### Automatic — GitHub + Workers Builds (recommended)
 
-1. **Create the database:** Cloudflare dashboard → *Storage & Databases → D1 → Create* → name it exactly `ajaia-docs` → copy the **Database ID**.
-2. **Wire it up:** edit `wrangler.jsonc` in this repo on GitHub (pencil icon) → replace the placeholder `00000000-0000-0000-0000-000000000000` with your Database ID → commit to `main` → Workers Builds redeploys automatically and succeeds.
-3. **Migrate + seed:** dashboard → D1 → `ajaia-docs` → *Console* → paste & run, in order:
-   `migrations/0001_init.sql` → `migrations/0002_profile.sql` (run **once**) → `migrations/seed.sql`.
-4. **Set the signing secret:** dashboard → *Workers → ajaia-doc-editor → Settings → Variables and Secrets* → add **Secret** `APP_SECRET` = any long random string.
-5. Open `https://ajaia-doc-editor.<your-subdomain>.workers.dev` and sign in as a demo user.
+Connect the repo once (*Workers & Pages → Create → Workers → Connect to Git*), then every push builds **and provisions itself**. `scripts/provision.mjs` is wired into `npm run build`, activates only inside CI (it skips locally — no Cloudflare credentials there), and:
 
-### Path B — Wrangler CLI
+1. creates the D1 database `ajaia-docs` if missing and wires its `database_id` into `wrangler.jsonc` for the deploy,
+2. applies `migrations/0001_init.sql`, then `migrations/0002_profile.sql` exactly once (detected via a SQLite pragma check),
+3. seeds the 4 demo users, but only when the `users` table is empty,
+4. deploys the Worker, then generates a 384-bit `APP_SECRET` and stores it as a real Worker **secret** — never committed, never logged.
+
+No dashboard clicks, no pasting ids, no SQL console; every step is idempotent and safe to re-run. Watch the build log for `[provision]` lines.
+
+### Manual — Wrangler CLI (alternative)
 
 ```bash
 npx wrangler login                          # one-time auth
@@ -99,7 +101,7 @@ npm run deploy                              # build + deploy Worker + assets
 npx wrangler secret put APP_SECRET          # paste a long random string when prompted
 ```
 
-> `APP_SECRET` signs session cookies and ALTCHA challenges. It is deliberately **not** in `wrangler.jsonc` (nothing secret should be committed) — set it as a Secret per Path A step 4 or the CLI command above; local dev uses the gitignored `.dev.vars` (see Quick start).
+> `APP_SECRET` signs session cookies and ALTCHA challenges. It is deliberately **not** in `wrangler.jsonc` (nothing secret should be committed) — CI generates and stores it as a Secret for you; the CLI path above does the same. If your CI token ever lacks D1 permissions, do it by hand: dashboard → D1 → create `ajaia-docs` → paste the id into `wrangler.jsonc` → run the three `migrations/*.sql` in the D1 Console → Worker Settings → Variables and Secrets → add `APP_SECRET`. Local dev uses the gitignored `.dev.vars` (see Quick start).
 
 ## Project layout
 
@@ -119,6 +121,7 @@ npx wrangler secret put APP_SECRET          # paste a long random string when pr
 │   └── lib/               # ALTCHA solver (blob Web Worker), .txt/.md/.docx import, formatting
 ├── tests/                 # Vitest unit tests
 ├── scripts/smoke.sh       # end-to-end API smoke test
+├── scripts/provision.mjs  # zero-touch CI provisioning (D1 + migrations + seed + APP_SECRET)
 ├── docs/screenshots/      # UI screenshots (login, dashboard, editor, profile, mobile)
 ├── ARCHITECTURE.md        # design decisions, tradeoffs, scope cuts
 ├── AI_WORKFLOW.md         # how AI was used in this build
